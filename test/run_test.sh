@@ -18,4 +18,8 @@ export VAULT_DIR="$TEST_ROOT/vault"
 export LOG_FILE="$TEST_ROOT/logs/scan_to_obsidian.log"
 export PROCESSED_LIST="$TEST_ROOT/logs/.scan_to_obsidian_processed"
 
+# vault/ と logs/ は .gitignore 対象で clone 直後には存在しないため、
+# 本体が触る前にここで作る(本体は _incoming とログ用ディレクトリを作らない)
+mkdir -p "$TEST_ROOT/logs" "$VAULT_DIR/001_scanbox/_incoming"
+
 bash "$SCRIPT_DIR/../scan_to_obsidian_local_v2.sh"

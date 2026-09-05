@@ -89,6 +89,12 @@ sanitize_filename() {
   printf '%s' "$s" | cut -c1-60
 }
 
+# Obsidianのwikilink構文を壊す文字だけを置換する
+# (| はエイリアス区切り、[ ] は括弧、# は見出しアンカー、^ はブロック参照)
+sanitize_link_target() {
+  printf '%s' "$1" | sed -e 's/[][|#^]/_/g'
+}
+
 # ファイル名から日付(YYYYMMDD)を推定。見つからなければ空文字を返す
 extract_date_from_filename() {
   local base="$1"
@@ -118,7 +124,13 @@ shopt -s nullglob
 for item in "$INBOX_DIR"/*; do
   [ -d "$item" ] && continue
   base=$(basename "$item")
-  file_hash=$(shasum -a 256 "$item" | awk '{print $1}')
+
+  # 取り込み中の一時ファイルがglob展開後に消えることがある。set -e で
+  # ログを残さず全体が落ちないよう、失敗はこのファイルのスキップに留める
+  if ! file_hash=$(shasum -a 256 "$item" 2>>"$LOG_FILE" | awk '{print $1}') || [ -z "$file_hash" ]; then
+    log "警告: ハッシュ計算に失敗、次回トリガーで再試行します: $base"
+    continue
+  fi
 
   # ファイル名ではなく内容のSHA-256で重複判定(同名・別内容の誤スキップを防ぐ)
   if grep -q "^${file_hash}  " "$PROCESSED_LIST"; then
@@ -175,7 +187,10 @@ $text_trunc"
       result_json=$(echo "$response" | jq -r '.message.content // empty' 2>>"$LOG_FILE" || true)
 
       if [ -z "$result_json" ]; then
-        log "警告: LLM応答取得失敗、要約なしでノートを作成します: $base ($(echo "$response" | jq -c '.error // .' 2>>"$LOG_FILE" || true))"
+        # 応答全体をログに流すと thinking フィールドで1行が数KBになるため、
+        # エラー本文だけを取り出して長さも切り詰める
+        err_detail=$(echo "$response" | jq -r '.error // "応答にcontentが含まれていません"' 2>/dev/null | head -1 | cut -c1-200 || true)
+        log "警告: LLM応答取得失敗、要約なしでノートを作成します: $base ($err_detail)"
       fi
     fi
 
@@ -222,6 +237,22 @@ $text_trunc"
     n=$((n+1))
   done
 
+  # _resources での保存名をノート作成前に確定させる。embedはこの名前を使うため、
+  # 実ファイル名とリンク先が食い違うことはない。
+  # 同名ファイルが既にある場合(内容が違うので重複判定は通過している)に
+  # 連番を付けないと、先に取り込んだ実ファイルをmvが上書きして消してしまう。
+  resource_name=$(sanitize_link_target "$base")
+  case "$resource_name" in
+    *.*) res_stem="${resource_name%.*}"; res_suffix=".${resource_name##*.}" ;;
+    *)   res_stem="$resource_name"; res_suffix="" ;;
+  esac
+  m=2
+  while [ -e "$RESOURCES_DIR/$resource_name" ]; do
+    resource_name="${res_stem}_${m}${res_suffix}"
+    m=$((m+1))
+  done
+  [ "$resource_name" != "$base" ] && log "保存先ファイル名を変更: $base -> $resource_name"
+
   # 3. ノートを先に作成(一時ファイルに書いてから確定させる)
   #    ここで失敗した場合は元ファイルをまだ移動していないので、次回トリガーで
   #    自動的に再試行される(_resourcesに取り残されることを防ぐ)
@@ -231,7 +262,7 @@ $text_trunc"
     echo "source: scansnap"
     echo "---"
     echo ""
-    echo "![[_resources/$base]]"
+    echo "![[_resources/$resource_name]]"
     echo ""
     echo "$summary"
   } > "$tmp_note_path" 2>>"$LOG_FILE"; then
@@ -242,8 +273,11 @@ $text_trunc"
   mv "$tmp_note_path" "$note_path"
 
   # 4. ノート作成が確定してから元ファイルを_resourcesへ移動
-  if ! mv "$item" "$RESOURCES_DIR/$base" 2>>"$LOG_FILE"; then
-    log "ERROR: ファイル移動に失敗しました(ノートは作成済み): $base -> $note_name"
+  #    -n と移動後の確認で、連番決定後に横から同名ファイルが現れた場合でも
+  #    既存ファイルを上書きしないようにする
+  if ! mv -n "$item" "$RESOURCES_DIR/$resource_name" 2>>"$LOG_FILE" || [ -e "$item" ]; then
+    log "ERROR: ファイル移動に失敗、作成済みノートを削除して次回再試行します: $base -> $resource_name"
+    rm -f "$note_path"
     continue
   fi
 
