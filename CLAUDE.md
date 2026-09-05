@@ -26,11 +26,24 @@ launchd の WatchPaths がそのフォルダを監視しており、テスト用
 
 ## 本番反映の手順
 
-このディレクトリで動作確認が取れたら、以下にコピーして反映する:
+このディレクトリで動作確認が取れたら `install.sh` で反映する:
+
+```bash
+./install.sh
+```
+
+plist は `com.user.scansnap-obsidian-local.plist.template` として持っており、
+`install.sh` が `__HOME__` と `__INCOMING_DIR__` を実パスに置換して
+`~/Library/LaunchAgents/` へ書き出す。launchd は plist 内の `~` や `$HOME` を
+展開しないため、テンプレートを直接配置しても動かない。
+
+**テンプレートを編集するときの注意**: `__HOME__` / `__INCOMING_DIR__` という
+文字列はコメント内に書かない。sed が区別せず置換してしまい、生成された plist の
+コメントが意味不明な文章になる。
+
+スクリプトだけの変更なら、plist を再登録する必要はない(launchd は起動のたびに
+スクリプトを読み直すため):
 
 ```bash
 cp scan_to_obsidian_local_v2.sh ~/bin/scan_to_obsidian_local_v2.sh
-cp com.user.scansnap-obsidian-local.plist ~/Library/LaunchAgents/com.user.scansnap-obsidian-local.plist
-launchctl unload ~/Library/LaunchAgents/com.user.scansnap-obsidian-local.plist
-launchctl load ~/Library/LaunchAgents/com.user.scansnap-obsidian-local.plist
 ```

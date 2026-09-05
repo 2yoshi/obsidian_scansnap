@@ -34,7 +34,8 @@ _incoming/ にファイルが入る
 | ファイル | 役割 |
 |---|---|
 | `scan_to_obsidian_local_v2.sh` | 本体。取り込み・要約・ノート作成・ファイル移動 |
-| `com.user.scansnap-obsidian-local.plist` | launchd 定義。`_incoming` を WatchPaths で監視 |
+| `com.user.scansnap-obsidian-local.plist.template` | launchd 定義のテンプレート。`_incoming` を WatchPaths で監視 |
+| `install.sh` | テンプレートのパスを置換して配置し、launchd に登録する |
 | `test/run_test.sh` | 本番パスに触れず `test/` 配下だけで動作確認するラッパー |
 | `CLAUDE.md` | 開発時の約束事（テストは必ず `test/` を使う、本番反映手順） |
 
@@ -77,13 +78,32 @@ Ollama の障害時の挙動を確認したい場合は、エンドポイント�
 OLLAMA_TAGS_URL=http://localhost:19999/api/tags OLLAMA_URL=http://localhost:19999/api/chat ./test/run_test.sh
 ```
 
-## 本番反映
+## インストール / 本番反映
+
+```bash
+./install.sh
+```
+
+スクリプトを `~/bin/` へ、plist を `~/Library/LaunchAgents/` へ配置して launchd に登録する。
+
+launchd は plist 内の `~` や `$HOME` を展開しないため、パスは絶対パスでなければならない。そのため plist はテンプレートとして持ち、`install.sh` が実行環境の値に置換して書き出す。
+
+vault の位置が既定（`~/syncthing/notes`）と違う場合は環境変数で指定する。
+
+```bash
+VAULT_DIR=~/Documents/vault ./install.sh
+```
+
+監視対象のフォルダを直接指定することもできる。
+
+```bash
+INCOMING_DIR=~/scan_inbox ./install.sh
+```
+
+スクリプトだけを更新したい場合（plist に変更がないとき）は、コピーするだけでよい。launchd は起動のたびにスクリプトを読み直すため、再登録は不要。
 
 ```bash
 cp scan_to_obsidian_local_v2.sh ~/bin/scan_to_obsidian_local_v2.sh
-cp com.user.scansnap-obsidian-local.plist ~/Library/LaunchAgents/com.user.scansnap-obsidian-local.plist
-launchctl unload ~/Library/LaunchAgents/com.user.scansnap-obsidian-local.plist
-launchctl load ~/Library/LaunchAgents/com.user.scansnap-obsidian-local.plist
 ```
 
 ## トラブルシュート

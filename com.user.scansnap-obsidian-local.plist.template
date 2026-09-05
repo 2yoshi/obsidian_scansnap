@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd は ~ や $HOME を展開しないため、パスはすべて絶対パスである必要がある。
+  このファイルはテンプレートで、install.sh がパスを実環境の値に置換して
+  ~/Library/LaunchAgents へ書き出す。直接配置しても動作しない。
+-->
 <plist version="1.0">
 <dict>
     <key>Label</key>
@@ -9,12 +14,12 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/pooh/bin/scan_to_obsidian_local_v2.sh</string>
+        <string>__HOME__/bin/scan_to_obsidian_local_v2.sh</string>
     </array>
 
     <key>WatchPaths</key>
     <array>
-        <string>/Users/pooh/syncthing/notes/001_scanbox/_incoming</string>
+        <string>__INCOMING_DIR__</string>
     </array>
 
     <key>EnvironmentVariables</key>
@@ -24,9 +29,9 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/pooh/Library/Logs/scan_to_obsidian.stdout.log</string>
+    <string>__HOME__/Library/Logs/scan_to_obsidian.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/pooh/Library/Logs/scan_to_obsidian.stderr.log</string>
+    <string>__HOME__/Library/Logs/scan_to_obsidian.stderr.log</string>
 
     <key>ThrottleInterval</key>
     <integer>5</integer>
